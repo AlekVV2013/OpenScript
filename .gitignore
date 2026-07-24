@@ -1,0 +1,27 @@
+# Android
+/build/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Gradle
+.gradle/
+build/
+
+# Local history
+*.orig
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Kotlin
+*.kotlin_module
+
+# Environment
+.env
+.env.local
+.env.*.local
