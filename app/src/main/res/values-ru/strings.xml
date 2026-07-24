@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Free Assistant</string>
+    <string name="run">Выполнить</string>
+    <string name="commands">Команды</string>
+    <string name="main_hint">Попробуйте: Индексировать мои фото, пожалуйста</string>
+    <string name="ready">Готово.</string>
+    <string name="settings">Настройки</string>
+    <string name="language">Язык</string>
+    <string name="english">Английский</string>
+    <string name="russian">Русский</string>
+    <string name="navigation_drawer_open">Открыть боковую панель</string>
+    <string name="navigation_drawer_close">Закрыть боковую панель</string>
+    <string name="auto_index_photos">Автоматическое индексирование фото</string>
+    <string name="auto_index_time">Время автоиндексации: %1$s</string>
+    <string name="choose_time">Выбрать время</string>
+    <string name="speech_output">Озвучивать результаты</string>
+    <string name="voice">Голос</string>
+    <string name="voice_female">Женский</string>
+    <string name="voice_male">Мужской</string>
+    <string name="speak_command">Скажите команду</string>
+    <string name="mic_description">Голосовой ввод</string>
+</resources>
