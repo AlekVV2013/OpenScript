@@ -233,7 +233,7 @@ class MainActivity : BaseActivity() {
         handlers += SetTimerTask()
         handlers += ImportNotesTask()
         handlers += IndexPhotosTask()
-        handlers += ListTagsTask(app.descriptions)
+        handlers += ListTagsTask(app.photos)
         handlers += ListPhotoTagsTask(app.photos)
         handlers += SearchNotesTask(app.notes)
         handlers += SearchPhotosByNameTask(app.photos)
@@ -290,9 +290,9 @@ class MainActivity : BaseActivity() {
             } else {
                 val language = LanguageManager.getLanguage(this@MainActivity)
                 val message = if (language == "ru") {
-                    "Команда не распознана. Попробуйте: ${handlers.first().hlebushekRu}"
+                    "Команда не распознана. Попробуйте: ${handlers.first().exampleRu}"
                 } else {
-                    "Command not recognized. Try: ${handlers.first().hlebushek}"
+                    "Command not recognized. Try: ${handlers.first().example}"
                 }
                 TaskResult(message)
             }
@@ -337,12 +337,12 @@ class MainActivity : BaseActivity() {
     private fun showCommandsDialog() {
         val language = LanguageManager.getLanguage(this)
         val displayItems = handlers.map { handler ->
-            val hlebushek = if (language == "ru") {
-                handler.hlebushekRu
+            val example = if (language == "ru") {
+                handler.exampleRu
             } else {
-                handler.hlebushek
+                handler.example
             }
-            "${handler.name}: $hlebushek"
+            "${handler.name}: $example"
         }.toTypedArray()
 
         runCatching {
@@ -351,11 +351,11 @@ class MainActivity : BaseActivity() {
                 .setItems(displayItems) { _, which ->
                     val handler = handlers[which]
                     val display = if (language == "ru") {
-                        handler.hlebushekRu
+                        handler.exampleRu
                     } else {
-                        handler.hlebushek
+                        handler.example
                     }
-                    runCommand(display, handler.hlebushek)
+                    runCommand(display, handler.example)
                 }
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
@@ -421,7 +421,7 @@ class MainActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    app.photos.indexAllPhotos()
+                    app.photoIndexer.indexAllPhotos()
                 }
                 chatAdapter.updateMessageText(
                     messageId,

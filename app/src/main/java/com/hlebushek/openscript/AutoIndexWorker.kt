@@ -10,12 +10,23 @@ class AutoIndexWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        return try {
-            val app = applicationContext as App
-            app.photos.indexAllPhotos()
-            Result.success()
-        } catch (e: Exception) {
-            Result.retry()
+        val app = applicationContext as? App ?: return Result.failure()
+
+        // Without the media permission there is nothing to index and retrying
+        // would just burn battery until the user grants it from Settings.
+        if (!app.photos.hasImagePermission()) {
+            return Result.failure()
         }
+
+        return try {
+            app.photoIndexer.indexAllPhotos()
+            Result.success()
+        } catch (_: Exception) {
+            if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
+        }
+    }
+
+    private companion object {
+        const val MAX_ATTEMPTS = 3
     }
 }

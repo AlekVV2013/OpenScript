@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.freeassistant"
+    namespace = "com.hlebushek.openscript"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.freeassistant"
+        applicationId = "com.hlebushek.openscript"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
