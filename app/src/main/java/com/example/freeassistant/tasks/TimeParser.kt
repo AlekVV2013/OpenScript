@@ -155,7 +155,7 @@ object TimeParser {
     fun normalize(input: String): String {
         return input.lowercase()
             .replace('ё', 'е')
-            .replace(Regex("[?!.,;\"\"'()\[\]{}]"), " ")
+            .replace(Regex("""[?!.,;"'()\[\]{}]"""), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
     }

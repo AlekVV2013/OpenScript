@@ -4,7 +4,7 @@ object InputNormalizer {
     fun normalize(input: String): String {
         return input.lowercase()
             .replace('\u0451', '\u0435') // ё -> е
-            .replace(Regex("[?!.,;\"\"'()\[\]{}]"), " ")
+            .replace(Regex("""[?!.,;"'()\[\]{}]"""), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
     }

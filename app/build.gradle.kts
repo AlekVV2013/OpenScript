@@ -32,6 +32,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
@@ -46,6 +47,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("androidx.drawerlayout:drawerlayout:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
