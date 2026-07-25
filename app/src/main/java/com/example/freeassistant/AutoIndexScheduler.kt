@@ -4,14 +4,9 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 object AutoIndexScheduler {
-    private const val WORK_TAG = "photo_index_work"
     private const val ALARM_REQUEST_CODE = 1001
 
     fun schedule(context: Context, hour: Int, minute: Int) {
@@ -47,6 +42,18 @@ object AutoIndexScheduler {
             24 * 60 * 60 * 1000,
             pendingIntent
         )
+    }
+
+    // Compatibility overload used by newer MainActivity template: schedule with forceRecreate flag
+    fun schedule(context: Context, forceRecreate: Boolean = false) {
+        // If auto-index is enabled, schedule using stored time, otherwise do nothing
+        if (SettingsManager.isAutoIndexEnabled(context)) {
+            schedule(
+                context,
+                SettingsManager.getAutoIndexHour(context),
+                SettingsManager.getAutoIndexMinute(context)
+            )
+        }
     }
 
     fun cancel(context: Context) {
