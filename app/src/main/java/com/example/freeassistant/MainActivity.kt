@@ -374,7 +374,7 @@ class MainActivity : AppCompatActivity() {
     private fun setSystemTimer(seconds: Int, label: String) {
         runCatching {
             val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-                putExtra(AlarmClock.EXTRA_SECONDS, seconds)
+                putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                 putExtra(AlarmClock.EXTRA_MESSAGE, label)
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

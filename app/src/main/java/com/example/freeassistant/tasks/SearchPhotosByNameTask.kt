@@ -1,7 +1,6 @@
-package com.example.freeassistant/tasks
+package com.example.freeassistant.tasks
 
 import android.content.Context
-import android.net.Uri
 import com.example.freeassistant.LanguageManager
 import com.example.freeassistant.photos.PhotoRepository
 
