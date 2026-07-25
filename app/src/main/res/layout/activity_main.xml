@@ -69,7 +69,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/mic_description"
                     android:src="@drawable/ic_mic"
-                    android:tint="?attr/colorOnSurfaceVariant" />
+                    app:tint="?attr/colorOnSurfaceVariant" />
 
             </LinearLayout>
 
