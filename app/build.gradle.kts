@@ -2,12 +2,11 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "com.hlebushek.openscript"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.hlebushek.openscript"
