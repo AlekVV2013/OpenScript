@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         handlers += SearchNotesTask(app.notes)
         handlers += SearchPhotosByNameTask(app.photos)
         handlers += SearchPhotosByDescriptionTask(app.descriptions, app.photos)
-        handlers += WeatherTask(app.weather)
+        handlers += WeatherTask()
         handlers += OpenAppTask(applicationContext)
         CatalogValidator.validate(handlers)
         return handlers

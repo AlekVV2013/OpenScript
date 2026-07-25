@@ -20,4 +20,6 @@
     <string name="voice_male">Male</string>
     <string name="speak_command">Say a command</string>
     <string name="mic_description">Voice input</string>
+    <string name="openweather_api_key">OpenWeatherMap API key</string>
+    <string name="openweather_api_key_hint">Enter API key</string>
 </resources>
