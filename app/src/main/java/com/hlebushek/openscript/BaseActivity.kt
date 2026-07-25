@@ -1,4 +1,4 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.content.Context
 import androidx.appcompat.app.AppCompatActivity

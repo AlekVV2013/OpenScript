@@ -49,7 +49,7 @@ Accessible from the sidebar menu:
 ## Project Structure
 
 ```
-FreeAssistant/
+OpenScript/
 ├── settings.gradle.kts
 ├── build.gradle.kts
 ├── gradle.properties
@@ -59,7 +59,7 @@ FreeAssistant/
     └── src/
         └── main/
             ├── AndroidManifest.xml
-            ├── java/com/example/freeassistant/
+            ├── java/com/hlebushek/openscript/
             │   ├── App.kt
             │   ├── MainActivity.kt
             │   ├── SettingsActivity.kt

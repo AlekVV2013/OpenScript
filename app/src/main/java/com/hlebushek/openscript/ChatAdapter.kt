@@ -1,4 +1,4 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
@@ -10,7 +10,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.example.freeassistant.tasks.ResultItem
+import com.hlebushek.openscript.tasks.ResultItem
 import com.google.android.material.color.MaterialColors
 
 data class ChatMessage(

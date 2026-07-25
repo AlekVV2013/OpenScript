@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FreeAssistant"
+rootProject.name = "OpenScript"
 include(":app")

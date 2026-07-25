@@ -1,4 +1,4 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.Manifest
 import android.content.Intent
@@ -19,24 +19,24 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.freeassistant.tasks.CurrentTimeTask
-import com.example.freeassistant.tasks.HelpTask
-import com.example.freeassistant.tasks.ImportNotesTask
-import com.example.freeassistant.tasks.IndexPhotosTask
-import com.example.freeassistant.tasks.IntentTranslator
-import com.example.freeassistant.tasks.ListPhotoTagsTask
-import com.example.freeassistant.tasks.ListTagsTask
-import com.example.freeassistant.tasks.OpenAppTask
-import com.example.freeassistant.tasks.ResultItem
-import com.example.freeassistant.tasks.SearchNotesTask
-import com.example.freeassistant.tasks.SearchPhotosByDescriptionTask
-import com.example.freeassistant.tasks.SearchPhotosByNameTask
-import com.example.freeassistant.tasks.SetAlarmTask
-import com.example.freeassistant.tasks.SetTimerTask
-import com.example.freeassistant.tasks.TaskAction
-import com.example.freeassistant.tasks.TaskHandler
-import com.example.freeassistant.tasks.TaskResult
-import com.example.freeassistant.tasks.WeatherTask
+import com.hlebushek.openscript.tasks.CurrentTimeTask
+import com.hlebushek.openscript.tasks.HelpTask
+import com.hlebushek.openscript.tasks.ImportNotesTask
+import com.hlebushek.openscript.tasks.IndexPhotosTask
+import com.hlebushek.openscript.tasks.IntentTranslator
+import com.hlebushek.openscript.tasks.ListPhotoTagsTask
+import com.hlebushek.openscript.tasks.ListTagsTask
+import com.hlebushek.openscript.tasks.OpenAppTask
+import com.hlebushek.openscript.tasks.ResultItem
+import com.hlebushek.openscript.tasks.SearchNotesTask
+import com.hlebushek.openscript.tasks.SearchPhotosByDescriptionTask
+import com.hlebushek.openscript.tasks.SearchPhotosByNameTask
+import com.hlebushek.openscript.tasks.SetAlarmTask
+import com.hlebushek.openscript.tasks.SetTimerTask
+import com.hlebushek.openscript.tasks.TaskAction
+import com.hlebushek.openscript.tasks.TaskHandler
+import com.hlebushek.openscript.tasks.TaskResult
+import com.hlebushek.openscript.tasks.WeatherTask
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -290,9 +290,9 @@ class MainActivity : BaseActivity() {
             } else {
                 val language = LanguageManager.getLanguage(this@MainActivity)
                 val message = if (language == "ru") {
-                    "Команда не распознана. Попробуйте: ${handlers.first().exampleRu}"
+                    "Команда не распознана. Попробуйте: ${handlers.first().hlebushekRu}"
                 } else {
-                    "Command not recognized. Try: ${handlers.first().example}"
+                    "Command not recognized. Try: ${handlers.first().hlebushek}"
                 }
                 TaskResult(message)
             }
@@ -337,12 +337,12 @@ class MainActivity : BaseActivity() {
     private fun showCommandsDialog() {
         val language = LanguageManager.getLanguage(this)
         val displayItems = handlers.map { handler ->
-            val example = if (language == "ru") {
-                handler.exampleRu
+            val hlebushek = if (language == "ru") {
+                handler.hlebushekRu
             } else {
-                handler.example
+                handler.hlebushek
             }
-            "${handler.name}: $example"
+            "${handler.name}: $hlebushek"
         }.toTypedArray()
 
         runCatching {
@@ -351,11 +351,11 @@ class MainActivity : BaseActivity() {
                 .setItems(displayItems) { _, which ->
                     val handler = handlers[which]
                     val display = if (language == "ru") {
-                        handler.exampleRu
+                        handler.hlebushekRu
                     } else {
-                        handler.example
+                        handler.hlebushek
                     }
-                    runCommand(display, handler.example)
+                    runCommand(display, handler.hlebushek)
                 }
                 .setPositiveButton(android.R.string.ok, null)
                 .show()

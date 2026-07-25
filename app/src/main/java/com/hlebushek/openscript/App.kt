@@ -1,9 +1,9 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.app.Application
-import com.example.freeassistant.notes.NotesRepository
-import com.example.freeassistant.photos.DescriptionEngine
-import com.example.freeassistant.photos.PhotoRepository
+import com.hlebushek.openscript.notes.NotesRepository
+import com.hlebushek.openscript.photos.DescriptionEngine
+import com.hlebushek.openscript.photos.PhotoRepository
 import com.google.android.material.color.DynamicColors
 
 class App : Application() {
