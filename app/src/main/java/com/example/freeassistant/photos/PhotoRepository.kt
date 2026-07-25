@@ -1,8 +1,12 @@
 package com.example.freeassistant.photos
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,10 +18,10 @@ class PhotoRepository(private val context: Context) {
     suspend fun indexAllPhotos() = withContext(Dispatchers.IO) {
         photoUris.clear()
         photoTags.clear()
-        
+
         val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME)
         val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
-        
+
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -59,6 +63,27 @@ class PhotoRepository(private val context: Context) {
         return photoUris.filter { uri ->
             val photoTags = getTagsForPhoto(uri)
             tags.any { tag -> photoTags.contains(tag) }
+        }
+    }
+
+    fun hasImagePermission(): Boolean {
+        return when {
+            Build.VERSION.SDK_INT >= 34 -> {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                    PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                    ) == PackageManager.PERMISSION_GRANTED
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                    PackageManager.PERMISSION_GRANTED
+            }
+            else -> {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                    PackageManager.PERMISSION_GRANTED
+            }
         }
     }
 }

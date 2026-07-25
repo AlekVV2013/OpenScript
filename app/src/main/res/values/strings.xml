@@ -22,4 +22,6 @@
     <string name="mic_description">Voice input</string>
     <string name="openweather_api_key">OpenWeatherMap API key</string>
     <string name="openweather_api_key_hint">Enter API key</string>
+    <string name="input_hint">Message</string>
+    <string name="greeting">Hi! Type a command or tap the microphone.</string>
 </resources>

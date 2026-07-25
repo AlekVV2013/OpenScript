@@ -22,4 +22,6 @@
     <string name="mic_description">Голосовой ввод</string>
     <string name="openweather_api_key">API-ключ OpenWeatherMap</string>
     <string name="openweather_api_key_hint">Введите API-ключ</string>
+    <string name="input_hint">Сообщение</string>
+    <string name="greeting">Привет! Введите команду или нажмите на микрофон.</string>
 </resources>

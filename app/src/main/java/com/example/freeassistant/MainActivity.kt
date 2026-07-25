@@ -1,186 +1,228 @@
 package com.example.freeassistant
 
-import android.app.TimePickerDialog
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.ActionBarDrawerToggle
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.freeassistant.tasks.*
+import androidx.recyclerview.widget.RecyclerView
+import com.example.freeassistant.tasks.CurrentTimeTask
+import com.example.freeassistant.tasks.HelpTask
+import com.example.freeassistant.tasks.ImportNotesTask
+import com.example.freeassistant.tasks.IndexPhotosTask
+import com.example.freeassistant.tasks.IntentTranslator
+import com.example.freeassistant.tasks.ListPhotoTagsTask
+import com.example.freeassistant.tasks.ListTagsTask
+import com.example.freeassistant.tasks.OpenAppTask
+import com.example.freeassistant.tasks.ResultItem
+import com.example.freeassistant.tasks.SearchNotesTask
+import com.example.freeassistant.tasks.SearchPhotosByDescriptionTask
+import com.example.freeassistant.tasks.SearchPhotosByNameTask
+import com.example.freeassistant.tasks.SetAlarmTask
+import com.example.freeassistant.tasks.SetTimerTask
+import com.example.freeassistant.tasks.TaskAction
+import com.example.freeassistant.tasks.TaskHandler
+import com.example.freeassistant.tasks.TaskResult
+import com.example.freeassistant.tasks.WeatherTask
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.navigation.NavigationView
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var inputEditText: EditText
-    private lateinit var runButton: Button
-    private lateinit var commandsButton: Button
-    private lateinit var micButton: ImageButton
-    private lateinit var statusText: TextView
-    private lateinit var resultsRecyclerView: androidx.recyclerview.widget.RecyclerView
-    private lateinit var drawerLayout: DrawerLayout
-    private lateinit var navigationView: NavigationView
-    private lateinit var toolbar: MaterialToolbar
+class MainActivity : BaseActivity() {
 
-    private lateinit var speechRecognizer: SpeechRecognizer
-    private lateinit var tts: TextToSpeech
-    private var isListening = false
-
-    private lateinit var resultAdapter: ResultAdapter
+    private lateinit var app: App
     private lateinit var handlers: List<TaskHandler>
-    private val app: App by lazy { application as App }
+    private lateinit var chatAdapter: ChatAdapter
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var toolbar: MaterialToolbar
+    private lateinit var navigationView: NavigationView
+    private lateinit var inputEditText: EditText
+    private lateinit var micButton: ImageButton
+    private lateinit var sendButton: FloatingActionButton
+    private lateinit var chatRecyclerView: RecyclerView
+    private lateinit var voiceManager: VoiceManager
 
-    private val notesFolderLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            result.data?.data?.let { uri ->
-                CoroutineScope(Dispatchers.Main).launch {
-                    handleImportNotes(uri)
+    private var lastInput: String? = null
+
+    @Volatile
+    private var isIndexing = false
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            val granted = grants.entries.any { entry ->
+                val relevantPermission =
+                    entry.key == Manifest.permission.READ_MEDIA_IMAGES ||
+                            entry.key == Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED ||
+                            entry.key == Manifest.permission.READ_EXTERNAL_STORAGE
+                entry.value && relevantPermission
+            }
+            if (granted) {
+                lastInput?.let { runTask(it) }
+            } else {
+                addAssistantMessage("Permission denied. Photo tasks will not work.")
+            }
+        }
+
+    private val notesFolderLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val progressId = addAssistantMessage("Importing notes…")
+            lifecycleScope.launch {
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) {
+                    // Ignore. Import may still work for this session.
+                }
+                val imported = withContext(Dispatchers.IO) {
+                    app.notes.importFromTree(uri)
+                }
+                chatAdapter.updateMessageText(
+                    progressId,
+                    "Imported $imported note(s). Try: notes search <text>"
+                )
+            }
+        }
+
+    // Fallback single-file picker for import notes (keeps backward compatibility)
+    private val notesFileLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch {
+                val imported = withContext(Dispatchers.IO) {
+                    app.notes.importFromUri(uri)
+                }
+                addAssistantMessage("Imported ${imported.size} note(s). Try: notes search <text>")
+            }
+        }
+
+    private val audioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                startSpeechRecognition()
+            } else {
+                addAssistantMessage("Microphone permission denied.")
+            }
+        }
+
+    private val speechLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val recognizedText = matches?.firstOrNull()
+                if (!recognizedText.isNullOrBlank()) {
+                    ensurePermissionsThenRun(recognizedText)
                 }
             }
         }
-    }
-
-    private fun pickNotesFolder() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            type = "text/*"
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        notesFolderLauncher.launch(intent)
-    }
-
-    private val speechRecognizerLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            matches?.firstOrNull()?.let { text ->
-                inputEditText.setText(text)
-                processInput(text)
-            }
-        }
-        isListening = false
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize views
-        inputEditText = findViewById(R.id.inputEditText)
-        runButton = findViewById(R.id.runButton)
-        commandsButton = findViewById(R.id.commandsButton)
-        micButton = findViewById(R.id.micButton)
-        statusText = findViewById(R.id.statusText)
-        resultsRecyclerView = findViewById(R.id.resultsRecyclerView)
+        app = application as App
+
         drawerLayout = findViewById(R.id.drawerLayout)
-        navigationView = findViewById(R.id.navigationView)
         toolbar = findViewById(R.id.toolbar)
+        navigationView = findViewById(R.id.navigationView)
+        inputEditText = findViewById(R.id.inputEditText)
+        micButton = findViewById(R.id.micButton)
+        sendButton = findViewById(R.id.sendButton)
+        chatRecyclerView = findViewById(R.id.chatRecyclerView)
 
-        // Setup toolbar
-        toolbar.setNavigationOnClickListener {
-            drawerLayout.open()
-        }
+        setSupportActionBar(toolbar)
+        val toggle = ActionBarDrawerToggle(
+            this,
+            drawerLayout,
+            toolbar,
+            R.string.navigation_drawer_open,
+            R.string.navigation_drawer_close
+        )
+        drawerLayout.addDrawerListener(toggle)
+        toggle.syncState()
 
-        // Setup navigation view
-        navigationView.setNavigationItemSelectedListener { menuItem ->
-            when (menuItem.itemId) {
+        navigationView.setNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navCommands -> {
+                    showCommandsDialog()
+                    drawerLayout.closeDrawers()
+                    true
+                }
                 R.id.navSettings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
+                    drawerLayout.closeDrawers()
                     true
                 }
                 else -> false
             }
         }
 
-        // Setup RecyclerView
-        resultAdapter = ResultAdapter { resultItem ->
-            handleResultItemClick(resultItem)
+        chatAdapter = ChatAdapter { item ->
+            onResultClicked(item)
         }
-        resultsRecyclerView.layoutManager = LinearLayoutManager(this)
-        resultsRecyclerView.adapter = resultAdapter
 
-        // Build task handlers
+        chatRecyclerView.layoutManager = LinearLayoutManager(this).apply {
+            stackFromEnd = true
+        }
+        chatRecyclerView.adapter = chatAdapter
+
         handlers = buildHandlers()
+        voiceManager = VoiceManager(this)
 
-        // Setup buttons
-        runButton.setOnClickListener {
-            processInput(inputEditText.text.toString())
-        }
-
-        commandsButton.setOnClickListener {
-            showCommands()
-        }
-
-        micButton.setOnClickListener {
-            startListening()
-        }
-
-        // Initialize TTS
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                updateTtsLanguage()
+        sendButton.setOnClickListener {
+            val input = inputEditText.text.toString().trim()
+            if (input.isNotBlank()) {
+                inputEditText.setText("")
+                ensurePermissionsThenRun(input)
             }
         }
 
-        // Initialize speech recognizer
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-            setRecognitionListener(object : android.speech.RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) = Unit
-                override fun onBeginningOfSpeech() = Unit
-                override fun onRmsChanged(rmsdB: Float) = Unit
-                override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() = Unit
-                override fun onError(error: Int) {
-                    isListening = false
-                    showStatus("Recognition error")
-                }
-                override fun onResults(results: Bundle?) {
-                    isListening = false
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    matches?.firstOrNull()?.let { text ->
-                        inputEditText.setText(text)
-                        processInput(text)
-                    }
-                }
-                override fun onPartialResults(partialResults: Bundle?) = Unit
-                override fun onEvent(eventType: Int, params: Bundle?) = Unit
-            })
+        micButton.setOnClickListener {
+            checkAudioPermissionAndStartSpeech()
         }
 
-        // Handle intent
         handleIncomingIntent(intent)
+        if (savedInstanceState == null) {
+            addAssistantMessage(getString(R.string.greeting))
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        voiceManager.refresh()
+    }
+
+    override fun onDestroy() {
+        voiceManager.shutdown()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIncomingIntent(intent)
-    }
-
-    private fun handleIncomingIntent(intent: Intent) {
-        when (intent.action) {
-            Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE, Intent.ACTION_VIEW -> {
-                intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
-                    inputEditText.setText(text)
-                }
-            }
-        }
     }
 
     private fun buildHandlers(): List<TaskHandler> {
@@ -202,48 +244,121 @@ class MainActivity : AppCompatActivity() {
         return handlers
     }
 
-    private fun processInput(input: String) {
-        if (input.isBlank()) return
+    private fun ensurePermissionsThenRun(input: String) {
+        if (needsPhotoPermission(input) && !app.photos.hasImagePermission()) {
+            lastInput = input
+            requestPhotoPermissions()
+        } else {
+            runTask(input)
+        }
+    }
 
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                showStatus("Processing...")
-                
-                val handler = handlers.firstOrNull { it.canHandle(input) }
-                
-                if (handler != null) {
-                    val result = withContext(Dispatchers.IO) {
-                        handler.handle(input, this@MainActivity)
-                    }
-                    handleResult(result)
+    private fun runTask(input: String) {
+        addUserMessage(input)
+        val typingId = addTypingMessage()
+        lifecycleScope.launch {
+            val result = executeTask(input)
+            removeMessage(typingId)
+            addAssistantMessage(result.message, result.items)
+            handleAction(result.action)
+            speakResult(result)
+        }
+    }
+
+    private fun runCommand(display: String, command: String) {
+        addUserMessage(display)
+        if (needsPhotoPermission(command) && !app.photos.hasImagePermission()) {
+            lastInput = command
+            requestPhotoPermissions()
+            return
+        }
+        val typingId = addTypingMessage()
+        lifecycleScope.launch {
+            val result = executeTask(command)
+            removeMessage(typingId)
+            addAssistantMessage(result.message, result.items)
+            handleAction(result.action)
+            speakResult(result)
+        }
+    }
+
+    private suspend fun executeTask(input: String): TaskResult {
+        return withContext(Dispatchers.IO) {
+            val handler = handlers.firstOrNull { it.canHandle(input) }
+            if (handler != null) {
+                handler.handle(input, this@MainActivity)
+            } else {
+                val language = LanguageManager.getLanguage(this@MainActivity)
+                val message = if (language == "ru") {
+                    "Команда не распознана. Попробуйте: ${handlers.first().exampleRu}"
                 } else {
-                    val language = LanguageManager.getLanguage(this@MainActivity)
-                    val message = if (language == "ru") {
-                        "Команда не распознана. Попробуйте: ${handlers.first().exampleRu}"
-                    } else {
-                        "Command not recognized. Try: ${handlers.first().example}"
-                    }
-                    showStatus(message)
-                    speak(message)
+                    "Command not recognized. Try: ${handlers.first().example}"
                 }
-            } catch (e: Exception) {
-                showStatus("Error: ${e.message}")
+                TaskResult(message)
             }
         }
     }
 
-    private fun handleResult(result: TaskResult) {
-        if (result.message.isNotEmpty()) {
-            showStatus(result.message)
-            speak(result.message)
-        }
+    private fun needsPhotoPermission(input: String): Boolean {
+        val language = LanguageManager.getLanguage(this)
+        val canonical = try {
+            IntentTranslator.toCanonical(input, language)
+        } catch (_: Exception) {
+            null
+        } ?: ""
+        val combined = "$input $canonical".lowercase()
+        return combined.contains("photo") ||
+                combined.contains("picture") ||
+                combined.contains("image") ||
+                combined.contains("pic") ||
+                combined.contains("фото") ||
+                combined.contains("фотограф") ||
+                combined.contains("изображени") ||
+                combined.contains("картинк") ||
+                combined.contains("снимк")
+    }
 
-        if (result.items.isNotEmpty()) {
-            resultAdapter.submitList(result.items)
+    private fun requestPhotoPermissions() {
+        val permissions = when {
+            Build.VERSION.SDK_INT >= 34 -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+            else -> arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            )
         }
+        permissionLauncher.launch(permissions)
+    }
 
-        CoroutineScope(Dispatchers.Main).launch {
-            handleAction(result.action)
+    private fun showCommandsDialog() {
+        val language = LanguageManager.getLanguage(this)
+        val displayItems = handlers.map { handler ->
+            val example = if (language == "ru") {
+                handler.exampleRu
+            } else {
+                handler.example
+            }
+            "${handler.name}: $example"
+        }.toTypedArray()
+
+        runCatching {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.commands)
+                .setItems(displayItems) { _, which ->
+                    val handler = handlers[which]
+                    val display = if (language == "ru") {
+                        handler.exampleRu
+                    } else {
+                        handler.example
+                    }
+                    runCommand(display, handler.example)
+                }
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
         }
     }
 
@@ -252,107 +367,281 @@ class MainActivity : AppCompatActivity() {
             TaskAction.None -> Unit
             is TaskAction.OpenUri -> openUri(action.uri)
             is TaskAction.LaunchApp -> launchApp(action.packageName)
-            TaskAction.PickNotesFolder -> pickNotesFolder()
+            TaskAction.PickNotesFolder -> {
+                // Use tree picker to align with new UI, but also support file picker fallback
+                try {
+                    notesFolderLauncher.launch(null)
+                } catch (_: Exception) {
+                    notesFileLauncher.launch(arrayOf("text/*"))
+                }
+            }
             TaskAction.IndexPhotos -> indexPhotos()
             is TaskAction.SetAlarm -> setSystemAlarm(action.hour, action.minute, action.label)
             is TaskAction.SetTimer -> setSystemTimer(action.seconds, action.label)
         }
     }
 
-    private fun handleResultItemClick(item: ResultItem) {
-        when {
-            item.uri != null -> openUri(item.uri)
-            item.packageName != null -> launchApp(item.packageName)
-            item.command != null -> inputEditText.setText(item.command)
-        }
-    }
-
-    private fun showCommands() {
-        val language = LanguageManager.getLanguage(this)
-        val commands = handlers.map { 
-            if (language == "ru") it.exampleRu else it.example 
-        }
-        val message = if (language == "ru") {
-            "Достupные команды:\n" + commands.joinToString("\n")
-        } else {
-            "Available commands:\n" + commands.joinToString("\n")
-        }
-        showStatus(message)
-        speak(message)
-    }
-
-    private fun startListening() {
-        if (isListening) return
-
-        isListening = true
-        showStatus("Listening...")
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, when (LanguageManager.getLanguage(this@MainActivity)) {
-                "ru" -> "ru-RU"
-                else -> "en-US"
-            })
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Say a command")
-        }
-
-        try {
-            speechRecognizerLauncher.launch(intent)
-        } catch (e: Exception) {
-            isListening = false
-            showStatus("Recognition not available")
-        }
-    }
-
-    private fun speak(text: String) {
-        if (!SettingsManager.isSpeechOutputEnabled(this)) return
-        if (tts.isSpeaking) {
-            tts.stop()
-        }
-        
-        val gender = SettingsManager.getVoiceGender(this)
-        val params = Bundle().apply {
-            when (gender) {
-                "male" -> putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, -1.0f)
-                "female" -> putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, 1.0f)
-            }
-        }
-        
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, null)
-    }
-
-    private fun updateTtsLanguage() {
-        val language = LanguageManager.getLanguage(this)
-        tts.language = when (language) {
-            "ru" -> Locale("ru")
-            else -> Locale("en")
-        }
-    }
-
-    private fun showStatus(message: String) {
-        runOnUiThread {
-            statusText.text = message
-        }
-    }
-
     private fun openUri(uri: Uri) {
-        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        try {
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "image/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             startActivity(intent)
-        } catch (e: Exception) {
-            toast("Cannot open: ${uri}")
+        }.onFailure {
+            toast("Cannot open item")
         }
     }
 
     private fun launchApp(packageName: String) {
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+        runCatching {
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                startActivity(intent)
+            } else {
+                toast("Cannot launch app")
+            }
+        }.onFailure {
+            toast("Cannot launch app")
+        }
+    }
+
+    private fun indexPhotos() {
+        if (isIndexing) {
+            addAssistantMessage("Photo indexing is already running.")
+            return
+        }
+        if (!app.photos.hasImagePermission()) {
+            lastInput = "index photos"
+            requestPhotoPermissions()
+            return
+        }
+        isIndexing = true
+        val messageId = addAssistantMessage("Indexing photos…")
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    app.photos.indexAllPhotos()
+                }
+                chatAdapter.updateMessageText(
+                    messageId,
+                    "Indexed photos. Try: list tags"
+                )
+            } finally {
+                isIndexing = false
+            }
+        }
+    }
+
+    private fun onResultClicked(item: ResultItem) {
+        when {
+            item.command != null -> runCommand(item.command, item.command)
+            item.uri != null -> openUri(item.uri)
+            item.packageName != null -> launchApp(item.packageName)
+            item.text != null -> showTextDialog(item.title, item.text)
+            else -> toast(item.title)
+        }
+    }
+
+    private fun showTextDialog(title: String, text: String) {
+        runCatching {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setMessage(text)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+    }
+
+    private fun handleIncomingIntent(intent: Intent) {
+        when (intent.action) {
+            Intent.ACTION_SEND_MULTIPLE -> handleSendMultiple(intent)
+            Intent.ACTION_SEND, Intent.ACTION_VIEW -> handleSendSingle(intent)
+        }
+    }
+
+    private fun handleSendMultiple(intent: Intent) {
+        val type = intent.type ?: return
+        if (!type.startsWith("text/")) return
+        val uris = IntentCompat.getParcelableArrayListExtra(
+            intent,
+            Intent.EXTRA_STREAM,
+            Uri::class.java
+        ) ?: return
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                var count = 0
+                uris.forEachIndexed { index, uri ->
+                    if (uri != null) {
+                        val text = app.notes.readText(uri)
+                        if (!text.isNullOrBlank()) {
+                            if (app.notes.addNote("Shared note ${index + 1}", text, uri.toString())) {
+                                count++
+                            }
+                        }
+                    }
+                }
+                count
+            }
+            addAssistantMessage(
+                if (saved > 0) {
+                    "Saved $saved note(s). Try: notes search <text>"
+                } else {
+                    "No new notes saved."
+                }
+            )
+        }
+    }
+
+    private fun handleSendSingle(intent: Intent) {
+        val type = intent.type
+        // Allow if no type but has text extra
+        val directText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        if (type != null && !type.startsWith("text/") && directText.isNullOrBlank() && intent.data == null) {
+            return
+        }
+
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+
+        lifecycleScope.launch {
+            val sharedText = directText?.takeIf { it.isNotBlank() }
+                ?: withContext(Dispatchers.IO) {
+                    readSharedStream(intent)
+                }
+
+            if (sharedText.isNullOrBlank()) {
+                // If intent data itself contains text via URI? Already handled
+                // If no text, ignore
+                return@launch
+            }
+
+            val saved = withContext(Dispatchers.IO) {
+                app.notes.addNote(
+                    subject ?: "Shared note",
+                    sharedText,
+                    "share"
+                )
+            }
+            addAssistantMessage(
+                if (saved) {
+                    "Note saved. Try: notes search <text>"
+                } else {
+                    "Duplicate note not saved."
+                }
+            )
+        }
+    }
+
+    private fun readSharedStream(intent: Intent): String? {
+        val streamUri = IntentCompat.getParcelableExtra(
+            intent,
+            Intent.EXTRA_STREAM,
+            Uri::class.java
+        )
+        val dataUri = intent.data
+        val streamText = streamUri?.let { app.notes.readText(it) }
+        if (!streamText.isNullOrBlank()) return streamText
+        return dataUri?.let { app.notes.readText(it) }
+    }
+
+    private fun checkAudioPermissionAndStartSpeech() {
+        val permission = Manifest.permission.RECORD_AUDIO
+        if (ContextCompat.checkSelfPermission(this, permission)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            startSpeechRecognition()
         } else {
-            toast("App not found: $packageName")
+            audioPermissionLauncher.launch(permission)
+        }
+    }
+
+    private fun startSpeechRecognition() {
+        val language = LanguageManager.getLanguage(this)
+        val recognizerLanguage = if (language == "ru") {
+            "ru-RU"
+        } else {
+            "en-US"
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognizerLanguage)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.speak_command))
+        }
+        runCatching {
+            speechLauncher.launch(intent)
+        }.onFailure {
+            toast("Speech recognition is not available.")
+        }
+    }
+
+    private fun speakResult(result: TaskResult) {
+        voiceManager.speak(result.message)
+    }
+
+    private fun now(): String {
+        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+    }
+
+    private fun nextId(): Long = System.nanoTime()
+
+    private fun addUserMessage(text: String) {
+        chatAdapter.addMessage(
+            ChatMessage(
+                id = nextId(),
+                text = text,
+                isFromUser = true,
+                time = now()
+            )
+        )
+        scrollToEnd()
+    }
+
+    private fun addAssistantMessage(
+        text: String,
+        items: List<ResultItem> = emptyList()
+    ): Long {
+        val id = nextId()
+        chatAdapter.addMessage(
+            ChatMessage(
+                id = id,
+                text = text,
+                isFromUser = false,
+                time = now(),
+                items = items
+            )
+        )
+        scrollToEnd()
+        return id
+    }
+
+    private fun addTypingMessage(): Long {
+        val id = nextId()
+        chatAdapter.addMessage(
+            ChatMessage(
+                id = id,
+                text = "",
+                isFromUser = false,
+                time = now(),
+                isTyping = true
+            )
+        )
+        scrollToEnd()
+        return id
+    }
+
+    private fun removeMessage(id: Long) {
+        chatAdapter.removeMessage(id)
+    }
+
+    private fun scrollToEnd() {
+        chatRecyclerView.post {
+            if (chatAdapter.itemCount > 0) {
+                chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
+            }
         }
     }
 
@@ -381,45 +670,22 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }.onFailure {
-            toast("Cannot open system clock app")
+            // Fallback to EXTRA_SECONDS for some OEMs
+            runCatching {
+                val fallback = Intent(AlarmClock.ACTION_SET_TIMER).apply {
+                    putExtra(AlarmClock.EXTRA_SECONDS, seconds)
+                    putExtra(AlarmClock.EXTRA_MESSAGE, label)
+                    putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(fallback)
+            }.onFailure {
+                toast("Cannot open system clock app")
+            }
         }
     }
 
-    private suspend fun indexPhotos() {
-        withContext(Dispatchers.IO) {
-            app.photos.indexAllPhotos()
-        }
-        val language = LanguageManager.getLanguage(this)
-        val message = if (language == "ru") {
-            "Фото проиндексированы"
-        } else {
-            "Photos indexed"
-        }
-        showStatus(message)
-        speak(message)
-    }
-
-    private suspend fun handleImportNotes(uri: Uri) {
-        val notes = withContext(Dispatchers.IO) {
-            app.notes.importFromUri(uri)
-        }
-        val language = LanguageManager.getLanguage(this)
-        val message = if (language == "ru") {
-            "Импортировано ${notes.size} заметок"
-        } else {
-            "Imported ${notes.size} notes"
-        }
-        showStatus(message)
-        speak(message)
-    }
-
-    private fun toast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        tts.shutdown()
-        speechRecognizer.destroy()
+    private fun toast(text: String) {
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     }
 }

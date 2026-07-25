@@ -3,7 +3,6 @@ package com.example.freeassistant
 import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
@@ -17,17 +16,26 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = when (LanguageManager.getLanguage(context)) {
-                "ru" -> Locale("ru")
-                else -> Locale("en")
-            }
+            updateLanguage()
             isReady = true
         }
     }
 
+    fun refresh() {
+        updateLanguage()
+    }
+
+    private fun updateLanguage() {
+        tts?.language = when (LanguageManager.getLanguage(context)) {
+            "ru" -> Locale("ru")
+            else -> Locale("en")
+        }
+    }
+
     fun speak(text: String) {
+        if (!SettingsManager.isSpeechOutputEnabled(context)) return
         if (!isReady || text.isBlank()) return
-        
+
         val gender = SettingsManager.getVoiceGender(context)
         val params = Bundle().apply {
             when (gender) {
@@ -35,7 +43,7 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                 "female" -> putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, 1.0f)
             }
         }
-        
+
         currentUtteranceId = System.currentTimeMillis().toString()
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, currentUtteranceId)
     }
