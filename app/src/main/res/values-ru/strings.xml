@@ -20,4 +20,6 @@
     <string name="voice_male">Мужской</string>
     <string name="speak_command">Скажите команду</string>
     <string name="mic_description">Голосовой ввод</string>
+    <string name="openweather_api_key">API-ключ OpenWeatherMap</string>
+    <string name="openweather_api_key_hint">Введите API-ключ</string>
 </resources>
