@@ -1,4 +1,4 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -16,7 +16,7 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_TIMEZONE_CHANGED -> {
                 restoreScheduling(context)
             }
-            "com.example.freeassistant.ACTION_INDEX_PHOTOS" -> {
+            "com.hlebushek.openscript.ACTION_INDEX_PHOTOS" -> {
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {

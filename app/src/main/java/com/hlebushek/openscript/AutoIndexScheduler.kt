@@ -1,4 +1,4 @@
-package com.example.freeassistant
+package com.hlebushek.openscript
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -12,7 +12,7 @@ object AutoIndexScheduler {
     fun schedule(context: Context, hour: Int, minute: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, BootReceiver::class.java).apply {
-            action = "com.example.freeassistant.ACTION_INDEX_PHOTOS"
+            action = "com.hlebushek.openscript.ACTION_INDEX_PHOTOS"
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -59,7 +59,7 @@ object AutoIndexScheduler {
     fun cancel(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, BootReceiver::class.java).apply {
-            action = "com.example.freeassistant.ACTION_INDEX_PHOTOS"
+            action = "com.hlebushek.openscript.ACTION_INDEX_PHOTOS"
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
