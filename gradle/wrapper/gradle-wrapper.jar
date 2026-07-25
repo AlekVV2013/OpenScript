@@ -1,8 +1,0 @@
-This is a placeholder. To use the actual Gradle wrapper, you need to download it from Gradle's distribution.
-
-To set up the Gradle wrapper properly:
-1. Download gradle-wrapper.jar from: https://gradle.org/release/8.5.2/
-2. Place it in: gradle/wrapper/gradle-wrapper.jar
-3. The file should be approximately 70KB
-
-Alternatively, run: gradle wrapper --gradle-version 8.5.2
