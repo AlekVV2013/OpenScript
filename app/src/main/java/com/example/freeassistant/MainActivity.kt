@@ -661,27 +661,24 @@ class MainActivity : BaseActivity() {
     }
 
     private fun setSystemTimer(seconds: Int, label: String) {
+        // EXTRA_LENGTH is the only timer-length extra in android.provider.AlarmClock;
+        // AOSP accepts 1 second .. 24 hours.
+        val length = seconds.coerceIn(1, 24 * 60 * 60)
+
+        fun timerIntent(skipUi: Boolean) = Intent(AlarmClock.ACTION_SET_TIMER).apply {
+            putExtra(AlarmClock.EXTRA_LENGTH, length)
+            putExtra(AlarmClock.EXTRA_MESSAGE, label)
+            putExtra(AlarmClock.EXTRA_SKIP_UI, skipUi)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
         runCatching {
-            val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-                putExtra(AlarmClock.EXTRA_LENGTH, seconds)
-                putExtra(AlarmClock.EXTRA_MESSAGE, label)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
+            startActivity(timerIntent(skipUi = true))
+        }.recoverCatching {
+            // Some OEM clock apps reject the "skip UI" variant - retry letting them show their UI.
+            startActivity(timerIntent(skipUi = false))
         }.onFailure {
-            // Fallback to EXTRA_SECONDS for some OEMs
-            runCatching {
-                val fallback = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-                    putExtra(AlarmClock.EXTRA_SECONDS, seconds)
-                    putExtra(AlarmClock.EXTRA_MESSAGE, label)
-                    putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(fallback)
-            }.onFailure {
-                toast("Cannot open system clock app")
-            }
+            toast("Cannot open system clock app")
         }
     }
 
