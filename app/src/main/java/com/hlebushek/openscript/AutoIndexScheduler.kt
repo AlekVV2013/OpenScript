@@ -1,73 +1,71 @@
 package com.hlebushek.openscript
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
+/**
+ * Schedules the daily photo indexing pass.
+ *
+ * This uses WorkManager rather than AlarmManager + a BroadcastReceiver: labelling a
+ * whole gallery with ML Kit takes far longer than the ~10s a broadcast receiver is
+ * allowed to run, and WorkManager survives reboots and process death on its own.
+ */
 object AutoIndexScheduler {
-    private const val ALARM_REQUEST_CODE = 1001
+    private const val WORK_NAME = "auto_index_photos"
 
     fun schedule(context: Context, hour: Int, minute: Int) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, BootReceiver::class.java).apply {
-            action = "com.hlebushek.openscript.ACTION_INDEX_PHOTOS"
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            ALARM_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val request = PeriodicWorkRequestBuilder<AutoIndexWorker>(1, TimeUnit.DAYS)
+            .setInitialDelay(initialDelayMinutes(hour, minute), TimeUnit.MINUTES)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+            )
+            .build()
 
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        val now = System.currentTimeMillis()
-        val alarmTime = calendar.timeInMillis
-        val triggerTime = if (alarmTime <= now) {
-            alarmTime + 24 * 60 * 60 * 1000
-        } else {
-            alarmTime
-        }
-
-        alarmManager.setRepeating(
-            AlarmManager.RTC_WAKEUP,
-            triggerTime,
-            24 * 60 * 60 * 1000,
-            pendingIntent
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request
         )
     }
 
-    // Compatibility overload used by newer MainActivity template: schedule with forceRecreate flag
-    fun schedule(context: Context, forceRecreate: Boolean = false) {
-        // If auto-index is enabled, schedule using stored time, otherwise do nothing
+    /**
+     * Schedules using the stored time when auto-indexing is enabled, otherwise cancels.
+     */
+    fun schedule(context: Context) {
         if (SettingsManager.isAutoIndexEnabled(context)) {
             schedule(
                 context,
                 SettingsManager.getAutoIndexHour(context),
                 SettingsManager.getAutoIndexMinute(context)
             )
+        } else {
+            cancel(context)
         }
     }
 
     fun cancel(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, BootReceiver::class.java).apply {
-            action = "com.hlebushek.openscript.ACTION_INDEX_PHOTOS"
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+    }
+
+    /** Minutes from now until the next occurrence of [hour]:[minute]. */
+    private fun initialDelayMinutes(hour: Int, minute: Int): Long {
+        val now = Calendar.getInstance()
+        val next = (now.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            ALARM_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
+        if (!next.after(now)) {
+            next.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return (next.timeInMillis - now.timeInMillis) / 60_000L
     }
 }
